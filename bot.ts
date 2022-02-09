@@ -74,14 +74,16 @@ class SpeedrunCom extends ApplicationCommandsModule {
 		const completions: ApplicationCommandChoice[] = [];
 		if (d.focusedOption.name === "game") {
 			const res = await fetch(
-				`https://www.speedrun.com/api/v1/games?name=${encodeURIComponent(d.focusedOption.value)}`,
+				`https://www.speedrun.com/api/v1/games?name=${
+					encodeURIComponent(d.focusedOption.value)
+				}`,
 			);
 			const body = await res.json();
 			completions.push(...(body.data as Game[]).map((game) => ({
 				name: game.names.international,
 				value: game.abbreviation,
 			})));
-		} 
+		}
 		return await d.autocomplete(
 			completions,
 		);
@@ -98,10 +100,20 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 	serve((request) => {
 		const url = new URL(request.url);
 		const { pathname } = url;
+		console.log(pathname, request);
 		switch (pathname) {
 			case "/discord-interaction": {
-				return new Promise((respondWith) => {
-					client.verifyFetchEvent({ request, respondWith });
+				// deno-lint-ignore no-async-promise-executor
+				return new Promise(async (res) => {
+					const interaction = await client.verifyFetchEvent({
+						respondWith: res,
+						request,
+					});
+					if (interaction === false) {
+						return res(new Response(null, { status: 401 }));
+					}
+					if (interaction.type === 1) return interaction.respond({ type: 1 });
+					await client._process(interaction);
 				});
 			}
 			default: {
