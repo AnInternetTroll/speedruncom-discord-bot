@@ -1,11 +1,13 @@
 # What is this?
 
 This is a really simple bot that is meant to help people in the speedrun.com
-server when assisting new comers.
+[Discord server](https://discord.gg/0h6sul1ZwHVpXJmK) when assisting new comers.
+So they can ask questions in the relevant place
 
 # Features
 
-- Look up a game and send it's discord invite link
+- It looks up a game or series and sends the Discord link, if there isn't one it
+  sends the forums
 
 # Setup
 
