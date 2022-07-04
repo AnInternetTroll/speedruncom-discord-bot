@@ -2,6 +2,7 @@
 import {
 	ApplicationCommandChoice,
 	ApplicationCommandInteraction,
+	ApplicationCommandOptionType,
 	ApplicationCommandsModule,
 	autocomplete,
 	AutocompleteInteraction,
@@ -9,7 +10,7 @@ import {
 	InteractionsClient,
 	slash,
 	SlashCommandPartial,
-} from "https://deno.land/x/harmony@v2.5.1/mod.ts";
+} from "https://deno.land/x/harmony@v2.6.0/mod.ts";
 import { serve, Status } from "https://deno.land/std@0.125.0/http/mod.ts";
 
 interface SearchResult {
@@ -34,10 +35,11 @@ const commands: SlashCommandPartial[] = [
 		description: "Get a link to a game's community",
 		options: [
 			{
-				autocomplete: true,
-				type: "STRING",
 				name: "game",
 				description: "A game's abbreviation",
+				type: ApplicationCommandOptionType.STRING,
+				autocomplete: true,
+				required: true,
 			},
 		],
 	},
@@ -46,10 +48,11 @@ const commands: SlashCommandPartial[] = [
 		description: "Get a link to a series' community",
 		options: [
 			{
-				autocomplete: true,
-				type: "STRING",
 				name: "series",
 				description: "A series' abbreviation",
+				type: ApplicationCommandOptionType.STRING,
+				autocomplete: true,
+				required: true,
 			},
 		],
 	},
