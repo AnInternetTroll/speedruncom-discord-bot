@@ -135,9 +135,18 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 		const { pathname } = url;
 		switch (pathname) {
 			case "/discord-interaction": {
-				return new Promise((respondWith) => {
-					client.verifyFetchEvent({ request, respondWith });
-				});
+				// deno-lint-ignore no-async-promise-executor
+				return new Promise(async (res) => {
+					const interaction = await client.verifyFetchEvent({
+						respondWith: res,
+						request,
+					});
+					if (interaction === false) {
+						return res(new Response(null, { status: 401 }));
+					}
+					if (interaction.type === 1) return interaction.respond({ type: 1 });
+						await client._process(interaction);
+					});
 			}
 			default: {
 				return new Response("Not found", {
