@@ -123,12 +123,26 @@ class SpeedrunCom extends ApplicationCommandsModule {
 	}
 }
 
+async function updateCommands() {
+	const client = new Client({
+		token: Deno.env.get("TOKEN"),
+		intents: [],
+	});
+	await client.connect();
+	await client.interactions.commands.bulkEdit(
+		commands,
+		Deno.env.get("TEST_SERVER"),
+	);
+	await client.close();
+}
+
 if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 	const client = new InteractionsClient({
 		publicKey: Deno.env.get("PUBLIC_KEY"),
 		token: Deno.env.get("TOKEN"),
 	});
 	client.loadModule(new SpeedrunCom());
+	await updateCommands();
 
 	serve((request) => {
 		const url = new URL(request.url);
@@ -166,10 +180,7 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 	console.log("Connected");
 	if (Deno.args.includes("--update")) {
 		console.log("Updating slash commands...");
-		await client.interactions.commands.bulkEdit(
-			commands,
-			Deno.env.get("TEST_SERVER"),
-		);
+		await updateCommands();
 		console.log("Updated slash commands");
 
 		console.log("Closing");
