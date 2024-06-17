@@ -171,15 +171,16 @@ class SpeedrunCom extends ApplicationCommandsModule {
 
 		const isGame = Boolean(d.focusedOption.name == "game");
 
-		const v2Res = await fetch(`https://www.speedrun.com/api/v2/GetSearch?_r=${
-			btoa(JSON.stringify({
+		const v2Res = await fetch("https://www.speedrun.com/api/v2/GetSearch", {
+			body: JSON.stringify({
 				query: d.focusedOption.value,
 				limit: 20,
 				favorExactMatches: false,
 				includeGames: isGame,
 				includeSeries: !isGame
-			})).replace(/=+$/, "")
-		}`);
+			}),
+			method: "POST"
+		});
 
 		if (v2Res.ok) {
 			const body: v2SearchResult = await v2Res.json();
