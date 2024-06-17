@@ -67,11 +67,11 @@ const commands: SlashCommandPartial[] = [
 	},
 	{
 		name: "series-community",
-		description: "Get a link to a Series' community",
+		description: "Get a link to a series' community",
 		options: [
 			{
 				name: "series",
-				description: "A Series' URL",
+				description: "A series' URL",
 				type: ApplicationCommandOptionType.STRING,
 				autocomplete: true,
 				required: true,
