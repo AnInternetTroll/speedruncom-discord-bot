@@ -80,8 +80,8 @@ const commands: SlashCommandPartial[] = [
 		],
 	},
 	{
-		name: "github",
-		description: "Get a link to the bot's source code on GitHub",
+		name: "source-code",
+		description: "Get a link to the bot's source code",
 	}
 ];
 
@@ -157,9 +157,9 @@ class SpeedrunCom extends ApplicationCommandsModule {
 		);
 	}
 
-	@slash()
-	async github(i: ApplicationCommandInteraction) {
-		await i.reply("Here's the link to the GitHub repository: https://github.com/AnInternetTroll/speedruncom-discord-bot");
+	@slash("source-code")
+	async sourceCode(i: ApplicationCommandInteraction) {
+		await i.reply("Here's the link to the repository: https://github.com/AnInternetTroll/speedruncom-discord-bot");
 	}
 
 	@autocomplete("*", "*")
