@@ -99,7 +99,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 			await i.reply(
 				userMention
 					? `${userMention}, the \`${i.option("game")}\` game wasn't found`
-					: `\`${i.option("game")}\` game not found`
+					: `The \`${i.option("game")}\` game wasn't found`
 			);
 			return;
 		}
@@ -133,7 +133,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 			await i.reply(
 				userMention
 					? `${userMention}, the \`${i.option("series")} Series\` wasn't found`
-					: `\`${i.option("series")} Series\` not found`
+					: `The \`${i.option("series")} Series\` wasn't found`
 			);
 			return;
 		}
