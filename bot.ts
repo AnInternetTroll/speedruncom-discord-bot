@@ -11,7 +11,6 @@ import {
 	slash,
 	SlashCommandPartial,
 } from "https://deno.land/x/harmony@v2.9.1/mod.ts";
-import { STATUS_CODE } from "https://deno.land/std@0.224.0/http/mod.ts";
 
 interface BaseGameAndSeries {
 	id: string;
@@ -247,7 +246,7 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 					});
 					if (interaction === false) {
 						return res(new Response(null, {
-							status: STATUS_CODE.Unauthorized
+							status: 401
 						}));
 					}
 					if (interaction.type === 1) return interaction.respond({ type: 1 });
@@ -256,7 +255,7 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 			}
 			default: {
 				return new Response("Not found", {
-					status: STATUS_CODE.NotFound,
+					status: 404,
 				});
 			}
 		}
