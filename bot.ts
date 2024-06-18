@@ -90,7 +90,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 	async gameCommunity(i: ApplicationCommandInteraction) {
 		const userMention = i.option("mention");
 		if (!userMention) {
-			i.defer();
+			await i.defer();
 		}
 
 		const res = await fetch(
@@ -127,7 +127,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 	async seriesCommunity(i: ApplicationCommandInteraction) {
 		const userMention = i.option("mention");
 		if (!userMention) {
-			i.defer();
+			await i.defer();
 		}
 
 		const res = await fetch(
