@@ -1,15 +1,16 @@
-#!/usr/bin/env -S deno run --allow-net=gateway.discord.gg,discord.com,www.www.speedrun.com --no-check --allow-env=DENO_DEPLOYMENT_ID,TOKEN,TEST_SERVER
+#!/usr/bin/env -S deno run --allow-net=gateway.discord.gg,discord.com,www.speedrun.com --no-check --allow-env=DENO_DEPLOYMENT_ID,TOKEN,TEST_SERVER,PUBLIC_KEY --allow-read --no-prompt
 import {
 	ApplicationCommandInteraction,
 	ApplicationCommandOption,
 	ApplicationCommandOptionType,
 	ApplicationCommandsModule,
-	autocomplete,
+	// autocomplete,
 	AutocompleteInteraction,
 	Client,
 	InteractionsClient,
-	slash,
+	// slash,
 	SlashCommandPartial,
+	User,
 } from "https://deno.land/x/harmony@v2.9.1/mod.ts";
 import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
@@ -17,7 +18,7 @@ interface BaseGameAndSeries {
 	id: string;
 	name: string;
 	url: string;
-};
+}
 
 interface v2SearchResult {
 	challengeList: unknown[];
@@ -26,7 +27,7 @@ interface v2SearchResult {
 	pageList: unknown[];
 	seriesList: BaseGameAndSeries[];
 	userList: unknown[];
-};
+}
 
 interface v1SearchResult {
 	id: string;
@@ -42,7 +43,19 @@ interface v1SearchResult {
 		rel: string;
 		uri: string;
 	}[];
+}
+
+const headers = {
+	"Content-Type": "application/json",
+	"User-Agent": "CommunityFinder/v3",
+	Accept: "application/json",
 };
+
+const enum CommandNames {
+	gameCommunity = "game-community",
+	seriesCommunity = "series-community",
+	sourceCode = "source-code",
+}
 
 const mentionUserOption: ApplicationCommandOption = {
 	name: "mention",
@@ -52,7 +65,7 @@ const mentionUserOption: ApplicationCommandOption = {
 
 const commands: SlashCommandPartial[] = [
 	{
-		name: "game-community",
+		name: CommandNames.gameCommunity,
 		description: "Get a link to a game's community",
 		options: [
 			{
@@ -66,7 +79,7 @@ const commands: SlashCommandPartial[] = [
 		],
 	},
 	{
-		name: "series-community",
+		name: CommandNames.seriesCommunity,
 		description: "Get a link to a series' community",
 		options: [
 			{
@@ -80,35 +93,76 @@ const commands: SlashCommandPartial[] = [
 		],
 	},
 	{
-		name: "source-code",
+		name: CommandNames.sourceCode,
 		description: "Get a link to the bot's source code",
-	}
+	},
 ];
 
+async function reply(
+	i: ApplicationCommandInteraction,
+	content: string,
+) {
+	const userMention = i.option("mention");
+	const allowedMentions = userMention instanceof User ? [userMention.id] : [];
+	if (i.responded) {
+		return await i.editResponse({
+			content,
+			allowedMentions: {
+				users: allowedMentions,
+			},
+		});
+	} else {
+		return await i.reply(content, {
+			allowedMentions: {
+				users: allowedMentions,
+			},
+		});
+	}
+}
+
+async function loading(i: ApplicationCommandInteraction) {
+	const userMention = i.option("mention");
+	if (userMention instanceof User) {
+		return await reply(i, `${userMention} loading, please wait`);
+	} else await i.defer();
+}
+
 class SpeedrunCom extends ApplicationCommandsModule {
-	@slash("game-community")
+	// @slash(CommandNames.gameCommunity)
 	async gameCommunity(i: ApplicationCommandInteraction) {
 		const userMention = i.option("mention");
-		if (!userMention) {
-			await i.defer();
-		}
+		const gameAbbreviation = i.option("game");
+		await loading(i);
 
 		const res = await fetch(
-			`https://www.speedrun.com/api/v1/games/${i.option("game")}`,
+			`https://www.speedrun.com/api/v1/games/${gameAbbreviation}`,
+			{ headers },
 		);
-		const game: v1SearchResult | undefined = (await res.json()).data;
-
-		if (!game) {
-			await i.reply(
+		if (!res.ok && res.status !== 404) {
+			const err = await res.text();
+			console.error("Unexpected speedrun.com response: ", res.statusText, err);
+			return await reply(
+				i,
+				`${
+					userMention ? `${userMention}, ` : ""
+				}Speedrun.com returned an unexpected error: ${res.statusText}; ${
+					err.length < 1800 ? `Body: \`\`\`${err}\`\`\`` : ""
+				}`,
+			);
+		}
+		if (res.status === 404) {
+			await reply(
+				i,
 				userMention
-					? `${userMention}, the \`${i.option("game")}\` game wasn't found`
-					: `The \`${i.option("game")}\` game wasn't found`
+					? `${userMention}, the \`${gameAbbreviation}\` game wasn't found`
+					: `The \`${gameAbbreviation}\` game wasn't found`,
 			);
 			return;
 		}
-
+		const game: v1SearchResult = (await res.json()).data;
 		if (userMention) {
-			await i.reply(
+			await reply(
+				i,
 				game.discord
 					? `${userMention}, here's the invite to \`${game.names.international}\`: ${game.discord}`
 					: `${userMention}, couldn't find any Discord invite for \`${game.names.international}\`. Here's a link to their forums: ${game.weblink}/forums`,
@@ -116,39 +170,55 @@ class SpeedrunCom extends ApplicationCommandsModule {
 			return;
 		}
 
-		await i.reply(
+		await reply(
+			i,
 			game.discord
 				? `Here's the invite to \`${game.names.international}\`: ${game.discord}`
 				: `Couldn't find any Discord invite for \`${game.names.international}\`. Here's a link to their forums: ${game.weblink}/forums`,
 		);
 	}
 
-	@slash("series-community")
+	// @slash(CommandNames.seriesCommunity)
 	async seriesCommunity(i: ApplicationCommandInteraction) {
 		const userMention = i.option("mention");
-		if (!userMention) {
-			await i.defer();
-		}
+		const seriesAbbreviation = i.option("series");
+		await loading(i);
 
 		const res = await fetch(
-			`https://www.speedrun.com/api/v1/series/${i.option("series")}`,
+			`https://www.speedrun.com/api/v1/series/${seriesAbbreviation}`,
+			{ headers },
 		);
-		const series: v1SearchResult | undefined = (await res.json()).data;
-	
-		if (!series) {
-			await i.reply(
+		if (!res.ok && res.status !== 404) {
+			const err = await res.text();
+			console.error("Unexpected speedrun.com response: ", res.statusText, err);
+			return await reply(
+				i,
+				`${
+					userMention ? `${userMention}, ` : ""
+				}Speedrun.com returned an unexpected error: ${res.statusText}; ${
+					err.length < 1800 ? `Body: \`\`\`${err}\`\`\`` : ""
+				}`,
+			);
+		}
+
+		if (res.status === 404) {
+			await reply(
+				i,
 				userMention
-					? `${userMention}, the \`${i.option("series")} Series\` wasn't found`
-					: `The \`${i.option("series")} Series\` wasn't found`
+					? `${userMention}, the \`${seriesAbbreviation} Series\` wasn't found`
+					: `The \`${i.option("series")} Series\` wasn't found`,
 			);
 			return;
 		}
 
+		const series: v1SearchResult = (await res.json()).data;
 		// series.weblink doesn't have the "/series/" prefix
-		const formLink = `https://www.speedrun.com/series/${series.abbreviation}/forums`;
+		const formLink =
+			`https://www.speedrun.com/series/${series.abbreviation}/forums`;
 
 		if (userMention) {
-			await i.reply(
+			await reply(
+				i,
 				series.discord
 					? `${userMention}, here's the invite to the \`${series.names.international} Series\`: ${series.discord}`
 					: `${userMention}, couldn't find any Discord invite for the \`${series.names.international} Series\`. Here's a link to their forums: ${formLink}`,
@@ -163,19 +233,22 @@ class SpeedrunCom extends ApplicationCommandsModule {
 		);
 	}
 
-	@slash("source-code")
+	// @slash(CommandNames.sourceCode)
 	async sourceCode(i: ApplicationCommandInteraction) {
-		await i.reply("Here's the link to the repository: https://github.com/AnInternetTroll/speedruncom-discord-bot");
+		await reply(
+			i,
+			"Here's the link to the repository: https://github.com/AnInternetTroll/speedruncom-discord-bot",
+		);
 	}
 
-	@autocomplete("*", "*")
-	async Autocomplete(d: AutocompleteInteraction) {
+	// @autocomplete("*", "*")
+	async complete(d: AutocompleteInteraction) {
 		if (!d.focusedOption.value) {
 			await d.autocomplete([]);
 			return;
 		}
 
-		const isGame = Boolean(d.focusedOption.name == "game");
+		const isGame = d.focusedOption.name === "game";
 
 		const v2Res = await fetch("https://www.speedrun.com/api/v2/GetSearch", {
 			body: JSON.stringify({
@@ -183,9 +256,10 @@ class SpeedrunCom extends ApplicationCommandsModule {
 				limit: 20,
 				favorExactMatches: false,
 				includeGames: isGame,
-				includeSeries: !isGame
+				includeSeries: !isGame,
 			}),
-			method: "POST"
+			headers,
+			method: "POST",
 		});
 
 		if (v2Res.ok) {
@@ -196,24 +270,43 @@ class SpeedrunCom extends ApplicationCommandsModule {
 				list.map((x) => ({
 					name: isGame ? x.name : `${x.name} Series`,
 					value: x.url,
-				}))
+				})),
 			);
 			return;
+		} else {
+			console.warn(
+				"Unexpected speedrun.com response: ",
+				v2Res.status,
+				await v2Res.text(),
+			);
 		}
 
 		// API v1 runs if API v2 fails
 		const v1Res = await fetch(
 			`https://www.speedrun.com/api/v1/${isGame ? "games" : "series"}?name=${
-				encodeURIComponent(d.focusedOption.value)
+				encodeURIComponent(
+					d.focusedOption.value,
+				)
 			}`,
+			{ headers },
 		);
+		if (!v1Res.ok) {
+			console.error(
+				"Unexpected speedrun.com response: ",
+				v1Res.status,
+				await v1Res.text(),
+			);
+			return await d.autocomplete([]);
+		}
 		const v1Body: v1SearchResult[] = (await v1Res.json()).data;
 
 		await d.autocomplete(
 			v1Body.map((x) => ({
-				name: isGame ? x.names.international : `${x.names.international} Series`,
+				name: isGame
+					? x.names.international
+					: `${x.names.international} Series`,
 				value: x.abbreviation,
-			}))
+			})),
 		);
 		return;
 	}
@@ -232,65 +325,107 @@ async function updateCommands() {
 	await client.off();
 }
 
-if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
-	const client = new InteractionsClient({
-		publicKey: Deno.env.get("PUBLIC_KEY"),
-		token: Deno.env.get("TOKEN"),
-	});
-	client.loadModule(new SpeedrunCom());
-	await updateCommands();
+// Disabling decorators because they require a config file on deno deploy
+// https://deno.com/deploy/changelog#es-decorators-are-enabled-on-deno-deploy-replacing-experimental-ts-decorators
+function addEventsToInteractionClient(client: InteractionsClient) {
+	const speedrunCom = new SpeedrunCom();
+	// client.loadModule(speedrunCom);
 
-	Deno.serve((request) => {
-		const url = new URL(request.url);
-		const { pathname } = url;
-		switch (pathname) {
-			case "/discord-interaction": {
-				// deno-lint-ignore no-async-promise-executor
-				return new Promise(async (res) => {
-					const interaction = await client.verifyFetchEvent({
-						respondWith: res,
-						request,
-					});
-					if (interaction === false) {
-						return res(new Response(null, {
-							status: 401
-						}));
-					}
-					if (interaction.type === 1) return interaction.respond({ type: 1 });
-						await client._process(interaction);
-					});
+	client.on("interactionError", (e) => {
+		console.error(e);
+	});
+
+	client.on("interaction", async (i) => {
+		try {
+			if (i.isAutocomplete()) {
+				return speedrunCom.complete(i);
+			} else if (i.isApplicationCommand()) {
+				switch (i.name as CommandNames) {
+					case CommandNames.gameCommunity:
+						await speedrunCom.gameCommunity(i);
+						break;
+					case CommandNames.seriesCommunity:
+						await speedrunCom.seriesCommunity(i);
+						break;
+					case CommandNames.sourceCode:
+						await speedrunCom.sourceCode(i);
+						break;
+					default:
+						console.log("Command not found", i.name);
+						break;
+				}
+			} else {
+				console.log("Interaction not found", i.type);
 			}
-			default: {
-				return new Response("Not found", {
-					status: 404,
-				});
-			}
+		} catch (error) {
+			console.error("Unexpected error:", error);
 		}
 	});
-} else {
-	// This is needed to load the .env file
-	await load({
-		export: true,
-	});
+}
 
-	const client = new Client({
-		token: Deno.env.get("TOKEN"),
-		intents: [],
-	});
-	console.log("Connecting to discord...");
-	client.interactions.loadModule(new SpeedrunCom());
-	await client.connect();
-	console.log("Connected");
-	if (Deno.args.includes("--update")) {
+if (import.meta.main) {
+	if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
+		const client = new InteractionsClient({
+			publicKey: Deno.env.get("PUBLIC_KEY"),
+			token: Deno.env.get("TOKEN"),
+		});
+		addEventsToInteractionClient(client);
+		// Too slow, so we have to run this in the background
+		updateCommands();
 
-		console.log("Updating slash commands...");
-		await updateCommands();
-		console.log("Updated slash commands");
+		Deno.serve((request) => {
+			const url = new URL(request.url);
+			const { pathname } = url;
+			switch (pathname) {
+				case "/discord-interaction": {
+					// deno-lint-ignore no-async-promise-executor
+					return new Promise(async (res) => {
+						const interaction = await client.verifyFetchEvent({
+							respondWith: res,
+							request,
+						});
+						if (interaction === false) {
+							return res(
+								new Response(null, {
+									status: 401,
+								}),
+							);
+						}
+						if (interaction.type === 1) return interaction.respond({ type: 1 });
+						await client._process(interaction);
+					});
+				}
+				default: {
+					return new Response("Not found", {
+						status: 404,
+					});
+				}
+			}
+		});
+	} else {
+		// This is needed to load the .env file
+		await load({
+			export: true,
+		});
 
-		console.log("Closing");
-		await client.off();
-		console.log("Closed");
+		const client = new Client({
+			token: Deno.env.get("TOKEN"),
+			intents: [],
+		});
+		console.log("Connecting to discord...");
+		addEventsToInteractionClient(client.interactions);
+		await client.connect();
+		console.log("Connected");
+		if (Deno.args.includes("--update")) {
+			console.log("Updating slash commands...");
+			await updateCommands();
+			console.log("Updated slash commands");
 
-		Deno.exit(0);
+			console.log("Closing");
+			await client.off();
+			console.log("Closed");
+
+			Deno.exit(0);
+		}
 	}
 }
