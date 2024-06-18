@@ -1,23 +1,25 @@
-#!/usr/bin/env -S deno run --allow-net=gateway.discord.gg,discord.com,www.www.speedrun.com --no-check --allow-env=DENO_DEPLOYMENT_ID,TOKEN,TEST_SERVER
+#!/usr/bin/env -S deno run --allow-net=gateway.discord.gg,discord.com,www.speedrun.com --no-check --allow-env=DENO_DEPLOYMENT_ID,TOKEN,TEST_SERVER --allow-read --no-prompt
 import {
 	ApplicationCommandInteraction,
 	ApplicationCommandOption,
 	ApplicationCommandOptionType,
 	ApplicationCommandsModule,
-	autocomplete,
+	// autocomplete,
 	AutocompleteInteraction,
 	Client,
 	InteractionsClient,
-	slash,
+	// slash,
 	SlashCommandPartial,
+	User,
 } from "https://deno.land/x/harmony@v2.9.1/mod.ts";
 import { STATUS_CODE } from "https://deno.land/std@0.224.0/http/mod.ts";
+import { GatewayIntents } from "https://deno.land/x/harmony@v2.9.1/src/types/gateway.ts";
 
 interface BaseGameAndSeries {
 	id: string;
 	name: string;
 	url: string;
-};
+}
 
 interface v2SearchResult {
 	challengeList: unknown[];
@@ -26,7 +28,7 @@ interface v2SearchResult {
 	pageList: unknown[];
 	seriesList: BaseGameAndSeries[];
 	userList: unknown[];
-};
+}
 
 interface v1SearchResult {
 	id: string;
@@ -42,7 +44,13 @@ interface v1SearchResult {
 		rel: string;
 		uri: string;
 	}[];
-};
+}
+
+const enum CommandNames {
+	gameCommunity = "game-community",
+	seriesCommunity = "series-community",
+	sourceCode = "sourceCode",
+}
 
 const mentionUserOption: ApplicationCommandOption = {
 	name: "mention",
@@ -52,7 +60,7 @@ const mentionUserOption: ApplicationCommandOption = {
 
 const commands: SlashCommandPartial[] = [
 	{
-		name: "game-community",
+		name: CommandNames.gameCommunity,
 		description: "Get a link to a game's community",
 		options: [
 			{
@@ -66,7 +74,7 @@ const commands: SlashCommandPartial[] = [
 		],
 	},
 	{
-		name: "series-community",
+		name: CommandNames.seriesCommunity,
 		description: "Get a link to a series' community",
 		options: [
 			{
@@ -80,26 +88,33 @@ const commands: SlashCommandPartial[] = [
 		],
 	},
 	{
-		name: "source-code",
+		name: CommandNames.sourceCode,
 		description: "Get a link to the bot's source code",
-	}
+	},
 ];
 
+// Disabling decorators because they require a config file on deno deploy
+// https://deno.com/deploy/changelog#es-decorators-are-enabled-on-deno-deploy-replacing-experimental-ts-decorators
 class SpeedrunCom extends ApplicationCommandsModule {
-	@slash("game-community")
-	async gameCommunity(i: ApplicationCommandInteraction) {
+	// @slash(CommandNames.gameCommunity)
+	static async gameCommunity(i: ApplicationCommandInteraction) {
 		await i.defer();
 		const res = await fetch(
 			`https://www.speedrun.com/api/v1/games/${i.option("game")}`,
 		);
 		const game: v1SearchResult | undefined = (await res.json()).data;
 		const userMention = i.option("mention");
+		const userId = userMention && userMention instanceof User
+			? userMention.id
+			: undefined;
+		console.log(userId);
 
 		if (!game) {
 			await i.reply(
 				userMention
 					? `${userMention}, the \`${i.option("game")}\` game wasn't found`
-					: `The \`${i.option("game")}\` game wasn't found`
+					: `The \`${i.option("game")}\` game wasn't found`,
+				{ allowedMentions: userId ? { users: [userId] } : undefined },
 			);
 			return;
 		}
@@ -109,6 +124,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 				game.discord
 					? `${userMention}, here's the invite to \`${game.names.international}\`: ${game.discord}`
 					: `${userMention}, couldn't find any Discord invite for \`${game.names.international}\`. Here's a link to their forums: ${game.weblink}/forums`,
+				{ allowedMentions: userId ? { users: [userId] } : undefined },
 			);
 			return;
 		}
@@ -117,35 +133,42 @@ class SpeedrunCom extends ApplicationCommandsModule {
 			game.discord
 				? `Here's the invite to \`${game.names.international}\`: ${game.discord}`
 				: `Couldn't find any Discord invite for \`${game.names.international}\`. Here's a link to their forums: ${game.weblink}/forums`,
+			{ allowedMentions: userId ? { users: [userId] } : undefined },
 		);
 	}
 
-	@slash("series-community")
-	async seriesCommunity(i: ApplicationCommandInteraction) {
+	// @slash(CommandNames.seriesCommunity)
+	static async seriesCommunity(i: ApplicationCommandInteraction) {
 		await i.defer();
 		const res = await fetch(
 			`https://www.speedrun.com/api/v1/series/${i.option("series")}`,
 		);
 		const series: v1SearchResult | undefined = (await res.json()).data;
 		const userMention = i.option("mention");
-	
+		const userId = userMention && userMention instanceof User
+			? userMention.id
+			: undefined;
+
 		if (!series) {
 			await i.reply(
 				userMention
 					? `${userMention}, the \`${i.option("series")} Series\` wasn't found`
-					: `The \`${i.option("series")} Series\` wasn't found`
+					: `The \`${i.option("series")} Series\` wasn't found`,
+				{ allowedMentions: userId ? { users: [userId] } : undefined },
 			);
 			return;
 		}
 
 		// series.weblink doesn't have the "/series/" prefix
-		const formLink = `https://www.speedrun.com/series/${series.abbreviation}/forums`;
+		const formLink =
+			`https://www.speedrun.com/series/${series.abbreviation}/forums`;
 
 		if (userMention) {
 			await i.reply(
 				series.discord
 					? `${userMention}, here's the invite to the \`${series.names.international} Series\`: ${series.discord}`
 					: `${userMention}, couldn't find any Discord invite for the \`${series.names.international} Series\`. Here's a link to their forums: ${formLink}`,
+				{ allowedMentions: userId ? { users: [userId] } : undefined },
 			);
 			return;
 		}
@@ -157,13 +180,15 @@ class SpeedrunCom extends ApplicationCommandsModule {
 		);
 	}
 
-	@slash("source-code")
-	async sourceCode(i: ApplicationCommandInteraction) {
-		await i.reply("Here's the link to the repository: https://github.com/AnInternetTroll/speedruncom-discord-bot");
+	// @slash(CommandNames.sourceCode)
+	static async sourceCode(i: ApplicationCommandInteraction) {
+		await i.reply(
+			"Here's the link to the repository: https://github.com/AnInternetTroll/speedruncom-discord-bot",
+		);
 	}
 
-	@autocomplete("*", "*")
-	async myAutocomplete(d: AutocompleteInteraction) {
+	// @autocomplete("*", "*")
+	static async myAutocomplete(d: AutocompleteInteraction) {
 		if (!d.focusedOption.value) {
 			await d.autocomplete([]);
 			return;
@@ -177,9 +202,9 @@ class SpeedrunCom extends ApplicationCommandsModule {
 				limit: 20,
 				favorExactMatches: false,
 				includeGames: isGame,
-				includeSeries: !isGame
+				includeSeries: !isGame,
 			}),
-			method: "POST"
+			method: "POST",
 		});
 
 		if (v2Res.ok) {
@@ -190,7 +215,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 				list.map((x) => ({
 					name: isGame ? x.name : `${x.name} Series`,
 					value: x.url,
-				}))
+				})),
 			);
 			return;
 		}
@@ -205,9 +230,11 @@ class SpeedrunCom extends ApplicationCommandsModule {
 
 		await d.autocomplete(
 			v1Body.map((x) => ({
-				name: isGame ? x.names.international : `${x.names.international} Series`,
+				name: isGame
+					? x.names.international
+					: `${x.names.international} Series`,
 				value: x.abbreviation,
-			}))
+			})),
 		);
 		return;
 	}
@@ -226,12 +253,39 @@ async function updateCommands() {
 	await client.off();
 }
 
+function addEventsToInteractionClient(client: InteractionsClient) {
+	// const speedrunCom = new SpeedrunCom();
+	// client.loadModule(speedrunCom);
+
+	client.on("interactionError", (e) => {
+		console.error(e);
+	});
+
+	client.on("interaction", (i) => {
+		if (i.isAutocomplete()) {
+			return SpeedrunCom.myAutocomplete(i);
+		}
+		if (i.isApplicationCommand()) {
+			switch (i.name as CommandNames) {
+				case CommandNames.gameCommunity:
+					return SpeedrunCom.gameCommunity(i);
+				case CommandNames.seriesCommunity:
+					return SpeedrunCom.seriesCommunity(i);
+				case CommandNames.sourceCode:
+					return SpeedrunCom.sourceCode(i);
+			}
+			console.log("Command not found", i.name);
+		}
+		console.log("Interaction not found", i.type);
+	});
+}
+
 if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 	const client = new InteractionsClient({
 		publicKey: Deno.env.get("PUBLIC_KEY"),
 		token: Deno.env.get("TOKEN"),
 	});
-	client.loadModule(new SpeedrunCom());
+	addEventsToInteractionClient(client);
 	await updateCommands();
 
 	Deno.serve((request) => {
@@ -246,13 +300,15 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 						request,
 					});
 					if (interaction === false) {
-						return res(new Response(null, {
-							status: STATUS_CODE.Unauthorized
-						}));
+						return res(
+							new Response(null, {
+								status: STATUS_CODE.Unauthorized,
+							}),
+						);
 					}
 					if (interaction.type === 1) return interaction.respond({ type: 1 });
-						await client._process(interaction);
-					});
+					await client._process(interaction);
+				});
 			}
 			default: {
 				return new Response("Not found", {
@@ -266,12 +322,11 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 		token: Deno.env.get("TOKEN"),
 		intents: [],
 	});
+	addEventsToInteractionClient(client.interactions);
 	console.log("Connecting to discord...");
-	client.interactions.loadModule(new SpeedrunCom());
 	await client.connect();
 	console.log("Connected");
 	if (Deno.args.includes("--update")) {
-
 		console.log("Updating slash commands...");
 		await updateCommands();
 		console.log("Updated slash commands");
