@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-net=gateway.discord.gg,discord.com,www.www.speedrun.com --no-check --allow-env=DENO_DEPLOYMENT_ID,TOKEN,TEST_SERVER
 import {
-	ApplicationCommandChoice,
 	ApplicationCommandInteraction,
+	ApplicationCommandOption,
 	ApplicationCommandOptionType,
 	ApplicationCommandsModule,
 	autocomplete,
@@ -10,10 +10,25 @@ import {
 	InteractionsClient,
 	slash,
 	SlashCommandPartial,
-} from "https://deno.land/x/harmony@v2.6.0/mod.ts";
-import { serve, Status } from "https://deno.land/std@0.125.0/http/mod.ts";
+} from "https://deno.land/x/harmony@v2.9.1/mod.ts";
+import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
-interface SearchResult {
+interface BaseGameAndSeries {
+	id: string;
+	name: string;
+	url: string;
+};
+
+interface v2SearchResult {
+	challengeList: unknown[];
+	gameList: BaseGameAndSeries[];
+	newsList: unknown[];
+	pageList: unknown[];
+	seriesList: BaseGameAndSeries[];
+	userList: unknown[];
+};
+
+interface v1SearchResult {
 	id: string;
 	names: {
 		international: string;
@@ -27,7 +42,13 @@ interface SearchResult {
 		rel: string;
 		uri: string;
 	}[];
-}
+};
+
+const mentionUserOption: ApplicationCommandOption = {
+	name: "mention",
+	description: "Notify a user with the community's link",
+	type: ApplicationCommandOptionType.USER,
+};
 
 const commands: SlashCommandPartial[] = [
 	{
@@ -36,11 +57,12 @@ const commands: SlashCommandPartial[] = [
 		options: [
 			{
 				name: "game",
-				description: "A game's abbreviation",
+				description: "A game's URL",
 				type: ApplicationCommandOptionType.STRING,
 				autocomplete: true,
 				required: true,
 			},
+			mentionUserOption,
 		],
 	},
 	{
@@ -49,77 +71,151 @@ const commands: SlashCommandPartial[] = [
 		options: [
 			{
 				name: "series",
-				description: "A series' abbreviation",
+				description: "A series' URL",
 				type: ApplicationCommandOptionType.STRING,
 				autocomplete: true,
 				required: true,
 			},
+			mentionUserOption,
 		],
 	},
+	{
+		name: "source-code",
+		description: "Get a link to the bot's source code",
+	}
 ];
 
 class SpeedrunCom extends ApplicationCommandsModule {
 	@slash("game-community")
-	async gameCommunity(t: ApplicationCommandInteraction) {
-		await t.defer();
-		const res = await fetch(
-			`https://www.speedrun.com/api/v1/games/${t.option("game")}`,
-		);
-		const game = (await res.json()).data as SearchResult;
-
-		if (game) {
-			await t.reply({
-				content: game.discord
-					? `Here's the invite to \`${game.names.international}\`: ${game.discord}`
-					: `Couldn't find any invite for \`${game.names.international}\`, here's a link to their forums: ${game.weblink}/forum`,
-			});
-		} else {
-			await t.reply({
-				content: `\`${t.option("game")}\` game not found`,
-			});
+	async gameCommunity(i: ApplicationCommandInteraction) {
+		const userMention = i.option("mention");
+		if (!userMention) {
+			await i.defer();
 		}
+
+		const res = await fetch(
+			`https://www.speedrun.com/api/v1/games/${i.option("game")}`,
+		);
+		const game: v1SearchResult | undefined = (await res.json()).data;
+
+		if (!game) {
+			await i.reply(
+				userMention
+					? `${userMention}, the \`${i.option("game")}\` game wasn't found`
+					: `The \`${i.option("game")}\` game wasn't found`
+			);
+			return;
+		}
+
+		if (userMention) {
+			await i.reply(
+				game.discord
+					? `${userMention}, here's the invite to \`${game.names.international}\`: ${game.discord}`
+					: `${userMention}, couldn't find any Discord invite for \`${game.names.international}\`. Here's a link to their forums: ${game.weblink}/forums`,
+			);
+			return;
+		}
+
+		await i.reply(
+			game.discord
+				? `Here's the invite to \`${game.names.international}\`: ${game.discord}`
+				: `Couldn't find any Discord invite for \`${game.names.international}\`. Here's a link to their forums: ${game.weblink}/forums`,
+		);
 	}
 
 	@slash("series-community")
-	async seriesCommunity(t: ApplicationCommandInteraction) {
-		await t.defer();
-		const res = await fetch(
-			`https://www.speedrun.com/api/v1/series/${t.option("series")}`,
-		);
-		const series = (await res.json()).data as SearchResult;
-
-		if (series) {
-			await t.reply({
-				content: series.discord
-					? `Here's the invite to the \`${series.names.international} series\`: ${series.discord}`
-					: `Couldn't find any invite for the \`${series.names.international} series\`, here's a link to their forums: ${series.weblink}/forum`,
-			});
-		} else {
-			await t.reply({
-				content: `\`${t.option("series")} series\` not found`,
-			});
+	async seriesCommunity(i: ApplicationCommandInteraction) {
+		const userMention = i.option("mention");
+		if (!userMention) {
+			await i.defer();
 		}
+
+		const res = await fetch(
+			`https://www.speedrun.com/api/v1/series/${i.option("series")}`,
+		);
+		const series: v1SearchResult | undefined = (await res.json()).data;
+	
+		if (!series) {
+			await i.reply(
+				userMention
+					? `${userMention}, the \`${i.option("series")} Series\` wasn't found`
+					: `The \`${i.option("series")} Series\` wasn't found`
+			);
+			return;
+		}
+
+		// series.weblink doesn't have the "/series/" prefix
+		const formLink = `https://www.speedrun.com/series/${series.abbreviation}/forums`;
+
+		if (userMention) {
+			await i.reply(
+				series.discord
+					? `${userMention}, here's the invite to the \`${series.names.international} Series\`: ${series.discord}`
+					: `${userMention}, couldn't find any Discord invite for the \`${series.names.international} Series\`. Here's a link to their forums: ${formLink}`,
+			);
+			return;
+		}
+
+		await i.reply(
+			series.discord
+				? `Here's the invite to the \`${series.names.international} Series\`: ${series.discord}`
+				: `Couldn't find any Discord invite for the \`${series.names.international} Series\`. Here's a link to their forums: ${formLink}`,
+		);
+	}
+
+	@slash("source-code")
+	async sourceCode(i: ApplicationCommandInteraction) {
+		await i.reply("Here's the link to the repository: https://github.com/AnInternetTroll/speedruncom-discord-bot");
 	}
 
 	@autocomplete("*", "*")
 	async Autocomplete(d: AutocompleteInteraction) {
-		const completions: ApplicationCommandChoice[] = [];
-		const isGame = Boolean(d.option("game"));
-		const res = await fetch(
+		if (!d.focusedOption.value) {
+			await d.autocomplete([]);
+			return;
+		}
+
+		const isGame = Boolean(d.focusedOption.name == "game");
+
+		const v2Res = await fetch("https://www.speedrun.com/api/v2/GetSearch", {
+			body: JSON.stringify({
+				query: d.focusedOption.value,
+				limit: 20,
+				favorExactMatches: false,
+				includeGames: isGame,
+				includeSeries: !isGame
+			}),
+			method: "POST"
+		});
+
+		if (v2Res.ok) {
+			const body: v2SearchResult = await v2Res.json();
+
+			const list = isGame ? body.gameList : body.seriesList;
+			await d.autocomplete(
+				list.map((x) => ({
+					name: isGame ? x.name : `${x.name} Series`,
+					value: x.url,
+				}))
+			);
+			return;
+		}
+
+		// API v1 runs if API v2 fails
+		const v1Res = await fetch(
 			`https://www.speedrun.com/api/v1/${isGame ? "games" : "series"}?name=${
 				encodeURIComponent(d.focusedOption.value)
 			}`,
 		);
-		const body = (await res.json()).data as SearchResult[];
-		completions.push(...body.map((search) => ({
-			name: isGame
-				? search.names.international
-				: `${search.names.international} series`,
-			value: search.abbreviation,
-		})));
-		return await d.autocomplete(
-			completions,
+		const v1Body: v1SearchResult[] = (await v1Res.json()).data;
+
+		await d.autocomplete(
+			v1Body.map((x) => ({
+				name: isGame ? x.names.international : `${x.names.international} Series`,
+				value: x.abbreviation,
+			}))
 		);
+		return;
 	}
 }
 
@@ -133,7 +229,7 @@ async function updateCommands() {
 		commands,
 		Deno.env.get("TEST_SERVER"),
 	);
-	await client.close();
+	await client.off();
 }
 
 if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
@@ -144,7 +240,7 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 	client.loadModule(new SpeedrunCom());
 	await updateCommands();
 
-	serve((request) => {
+	Deno.serve((request) => {
 		const url = new URL(request.url);
 		const { pathname } = url;
 		switch (pathname) {
@@ -156,7 +252,9 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 						request,
 					});
 					if (interaction === false) {
-						return res(new Response(null, { status: 401 }));
+						return res(new Response(null, {
+							status: 401
+						}));
 					}
 					if (interaction.type === 1) return interaction.respond({ type: 1 });
 						await client._process(interaction);
@@ -164,12 +262,17 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 			}
 			default: {
 				return new Response("Not found", {
-					status: Status.NotFound,
+					status: 404,
 				});
 			}
 		}
 	});
 } else {
+	// This is needed to load the .env file
+	await load({
+		export: true,
+	});
+
 	const client = new Client({
 		token: Deno.env.get("TOKEN"),
 		intents: [],
@@ -179,12 +282,13 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 	await client.connect();
 	console.log("Connected");
 	if (Deno.args.includes("--update")) {
+
 		console.log("Updating slash commands...");
 		await updateCommands();
 		console.log("Updated slash commands");
 
 		console.log("Closing");
-		await client.close();
+		await client.off();
 		console.log("Closed");
 
 		Deno.exit(0);
