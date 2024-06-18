@@ -87,7 +87,6 @@ const commands: SlashCommandPartial[] = [
 class SpeedrunCom extends ApplicationCommandsModule {
 	@slash("game-community")
 	async gameCommunity(i: ApplicationCommandInteraction) {
-		await i.defer();
 		const res = await fetch(
 			`https://www.speedrun.com/api/v1/games/${i.option("game")}`,
 		);
@@ -121,7 +120,6 @@ class SpeedrunCom extends ApplicationCommandsModule {
 
 	@slash("series-community")
 	async seriesCommunity(i: ApplicationCommandInteraction) {
-		await i.defer();
 		const res = await fetch(
 			`https://www.speedrun.com/api/v1/series/${i.option("series")}`,
 		);
