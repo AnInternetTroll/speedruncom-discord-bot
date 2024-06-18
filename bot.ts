@@ -88,11 +88,15 @@ const commands: SlashCommandPartial[] = [
 class SpeedrunCom extends ApplicationCommandsModule {
 	@slash("game-community")
 	async gameCommunity(i: ApplicationCommandInteraction) {
+		const userMention = i.option("mention");
+		if (!userMention) {
+			i.defer();
+		}
+
 		const res = await fetch(
 			`https://www.speedrun.com/api/v1/games/${i.option("game")}`,
 		);
 		const game: v1SearchResult | undefined = (await res.json()).data;
-		const userMention = i.option("mention");
 
 		if (!game) {
 			await i.reply(
@@ -121,11 +125,15 @@ class SpeedrunCom extends ApplicationCommandsModule {
 
 	@slash("series-community")
 	async seriesCommunity(i: ApplicationCommandInteraction) {
+		const userMention = i.option("mention");
+		if (!userMention) {
+			i.defer();
+		}
+
 		const res = await fetch(
 			`https://www.speedrun.com/api/v1/series/${i.option("series")}`,
 		);
 		const series: v1SearchResult | undefined = (await res.json()).data;
-		const userMention = i.option("mention");
 	
 		if (!series) {
 			await i.reply(
@@ -161,7 +169,7 @@ class SpeedrunCom extends ApplicationCommandsModule {
 	}
 
 	@autocomplete("*", "*")
-	async myAutocomplete(d: AutocompleteInteraction) {
+	async Autocomplete(d: AutocompleteInteraction) {
 		if (!d.focusedOption.value) {
 			await d.autocomplete([]);
 			return;
