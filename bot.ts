@@ -11,6 +11,7 @@ import {
 	slash,
 	SlashCommandPartial,
 } from "https://deno.land/x/harmony@v2.9.1/mod.ts";
+import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
 interface BaseGameAndSeries {
 	id: string;
@@ -259,6 +260,11 @@ if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
 		}
 	});
 } else {
+	// This is needed to load the .env file
+	await load({
+		export: true,
+	});
+
 	const client = new Client({
 		token: Deno.env.get("TOKEN"),
 		intents: [],
