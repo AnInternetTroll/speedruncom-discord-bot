@@ -122,8 +122,12 @@ async function reply(
 
 async function loading(i: ApplicationCommandInteraction) {
 	const userMention = i.option("mention");
+	const query = i.option("game") ?? i.option("series");
 	if (userMention instanceof User) {
-		return await reply(i, `${userMention} loading, please wait`);
+		return await reply(
+			i,
+			`${userMention}, fetching community link for the \`${query}\`...`,
+		);
 	} else await i.defer();
 }
 
